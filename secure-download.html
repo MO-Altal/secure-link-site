@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Secure File Downloader</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f9fafb;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .container {
+      background: white;
+      padding: 30px 40px;
+      border-radius: 12px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.08);
+      width: 360px;
+      text-align: center;
+    }
+    h2 {
+      font-size: 24px;
+      margin-bottom: 20px;
+    }
+    select, button {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 15px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 16px;
+    }
+    button {
+      background: #1a40ff;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0f2fc1;
+    }
+    #result {
+      font-size: 14px;
+      min-height: 1.2em;
+    }
+    #result a {
+      color: green;
+      text-decoration: underline;
+    }
+    #result .error {
+      color: #c00;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h2>🔐 Secure One-Time Link</h2>
+
+    <!-- Dropdown will be filled with your S3 keys -->
+    <select id="fileSelect">
+      <option>Loading files…</option>
+    </select>
+
+    <button id="genBtn" onclick="generateLink()">Generate Link</button>
+    <div id="result"></div>
+  </div>
+
+  <script>
+    const apiBase = "https://4y3p1rcnne.execute-api.eu-north-1.amazonaws.com/prod";
+
+    // 1) On page load, fetch the list of objects
+    async function loadFileList() {
+      const sel = document.getElementById("fileSelect");
+      sel.disabled = true;
+      try {
+        const resp = await fetch(`${apiBase}/list`);
+        const { files } = await resp.json();       
+        
+        if (!Array.isArray(files) || files.length === 0) {
+          sel.innerHTML = `<option>No files found</option>`;
+        } else {
+          sel.innerHTML = files
+            .map(k => `<option value="${k}">${k}</option>`)
+            .join("");
+        }
+      } catch (err) {
+        console.error(err);
+        sel.innerHTML = `<option>Error loading files</option>`;
+      } finally {
+        sel.disabled = false;
+      }
+    }
+
+    // 2) When user clicks, call your POST /generate
+    async function generateLink() {
+      const sel = document.getElementById("fileSelect");
+      const key = sel.value;
+      const result = document.getElementById("result");
+      result.textContent = "";
+      
+      if (!key) {
+        result.innerHTML = `<span class="error">❌ No file selected.</span>`;
+        return;
+      }
+      
+      result.textContent = "⏳ Generating link…";
+      document.getElementById("genBtn").disabled = true;
+
+      try {
+        const resp = await fetch(`${apiBase}/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ file_key: key })
+        });
+
+        const { download_url, message } = await resp.json();
+        if (download_url) {
+          result.innerHTML = `✅ <a href="${download_url}" target="_blank">Click here to download</a>`;
+        } else {
+          result.innerHTML = `<span class="error">❌ ${message || "Failed to generate link."}</span>`;
+        }
+      } catch (err) {
+        console.error(err);
+        result.innerHTML = `<span class="error">❌ Error contacting server.</span>`;
+      } finally {
+        document.getElementById("genBtn").disabled = false;
+      }
+    }
+
+    // Kick it all off
+    window.addEventListener("DOMContentLoaded", loadFileList);
+  </script>
+
+</body>
+</html>
